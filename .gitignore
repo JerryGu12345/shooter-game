@@ -1,0 +1,9 @@
+# Ignore everything
+*
+
+# Allow the .gitignore file itself
+!.gitignore
+
+# Allow the specific folder and all its contents
+!/Assets/
+!/Assets/**/*
