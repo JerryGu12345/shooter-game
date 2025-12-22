@@ -10,8 +10,10 @@ public class GameOverUI : MonoBehaviour
 
     [SerializeField] private GameObject gameOverPanel;
     [SerializeField] private TextMeshProUGUI gameOverText;
+    [SerializeField] private TextMeshProUGUI rewardsText;
 
     private bool isReturningToMenu = false;
+    private bool hasRewarded = false;
 
     private void Awake()
     {
@@ -65,6 +67,30 @@ public class GameOverUI : MonoBehaviour
         else
         {
             Debug.LogError("Game Over Text is not assigned!");
+        }
+
+        // Reward coins
+        if (!hasRewarded && PlayerProgression.Instance != null)
+        {
+            hasRewarded = true;
+            int coinsEarned = PlayerProgression.Instance.coinsPerMatch;
+            
+            if (isWinner)
+            {
+                coinsEarned += PlayerProgression.Instance.coinsPerWin;
+                PlayerProgression.Instance.RewardWin();
+            }
+            else
+            {
+                PlayerProgression.Instance.RewardMatchParticipation();
+            }
+            
+            if (rewardsText != null)
+            {
+                rewardsText.text = $"+{coinsEarned} coins earned!";
+            }
+            
+            Debug.Log($"Rewarded {coinsEarned} coins");
         }
 
         Cursor.lockState = CursorLockMode.None;

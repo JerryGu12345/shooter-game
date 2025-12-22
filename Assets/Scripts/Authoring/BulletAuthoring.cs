@@ -24,4 +24,5 @@ public struct Bullet : IComponentData {
     public int p0;
     public int p1;
     public int p2;
+    public int damage;
 }

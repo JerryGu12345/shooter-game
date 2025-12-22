@@ -38,22 +38,40 @@ partial struct BulletSystem : ISystem
                 
                 if (math.distance(localTransform.ValueRW.Position, playerTransform.ValueRO.Position)<1.0f) {
                     if (bullet.ValueRW.p1==-1) {
-                        player.ValueRW.health-=30;
+                        player.ValueRW.health -= bullet.ValueRW.damage; // Use bullet's damage
                         bullet.ValueRW.p1=ghostId;
                         bullet.ValueRW.moveSpeed-=5f;
+                        
+                        // Award kill coins if player died
+                        if (state.World.IsServer() && player.ValueRW.health <= 0)
+                        {
+                            // Note: Coins will be awarded through GameOverUI
+                            Debug.Log($"Player {ghostId} was killed!");
+                        }
                         break;
                     } else if (bullet.ValueRW.p1==ghostId) continue;
                     else if (bullet.ValueRW.p2==-1) {
-                        player.ValueRW.health-=30;
+                        player.ValueRW.health -= bullet.ValueRW.damage;
                         bullet.ValueRW.p2=ghostId;
                         bullet.ValueRW.moveSpeed-=5f;
+                        
+                        if (state.World.IsServer() && player.ValueRW.health <= 0)
+                        {
+                            Debug.Log($"Player {ghostId} was killed!");
+                        }
                         break;
                     } else if (bullet.ValueRW.p2==ghostId) continue;
                     else {
-                        player.ValueRW.health-=30;
+                        player.ValueRW.health -= bullet.ValueRW.damage;
                         bullet.ValueRW.p2=ghostId;
                         bullet.ValueRW.moveSpeed-=5f;
-                        if (state.World.IsServer()) {
+                        
+                        if (state.World.IsServer())
+                        {
+                            if (player.ValueRW.health <= 0)
+                            {
+                                Debug.Log($"Player {ghostId} was killed!");
+                            }
                             entityCommandBuffer.DestroyEntity(entity);
                         }
                         break;
@@ -70,7 +88,7 @@ partial struct BulletSystem : ISystem
         
         entityCommandBuffer.Playback(state.EntityManager);
 
-        // Debug health display (works now that we removed GameOverTag filtering)
+        // Debug health display
         foreach ((RefRO<Player> player, Entity entity) in SystemAPI.Query<RefRO<Player>>().WithEntityAccess()) {
             Debug.Log(entity.Index + " " + player.ValueRO.health);
         }
