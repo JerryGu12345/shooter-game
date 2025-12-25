@@ -3,45 +3,116 @@ using System.Collections.Generic;
 using UnityEngine;
 
 [Serializable]
-public class WeaponData
+public class GunStats
 {
-    public string weaponId;
-    public string weaponName;
-    public int baseDamage;
-    public float baseFireRate;
-    public int baseCost;
-    public int currentLevel;
-    public bool isOwned;
+    public int propulsionLevel = 1;
+    public int bulletMassLevel = 1;
+    public int magSizeLevel = 1;
+    public int fireRateLevel = 1;
     
-    // Upgrade costs increase per level
-    public int GetUpgradeCost()
+    // Track upgrade order for cost calculation
+    public int propulsionUpgradeOrder = 0;
+    public int bulletMassUpgradeOrder = 0;
+    public int magSizeUpgradeOrder = 0;
+    public int fireRateUpgradeOrder = 0;
+    
+    // Stat value tables
+    private static readonly float[] propulsionValues = { 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    private static readonly float[] bulletMassValues = { 1, 1.25f, 1.5f, 1.75f, 2, 2.25f, 2.5f, 2.75f, 3 };
+    private static readonly int[] magSizeValues = { 4, 6, 9, 13, 20, 30, 45, 67, 100 };
+    private static readonly float[] fireRateValues = { 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    
+    public float GetPropulsion() => propulsionValues[propulsionLevel - 1];
+    public float GetBulletMass() => bulletMassValues[bulletMassLevel - 1];
+    public int GetMagSize() => magSizeValues[magSizeLevel - 1];
+    public float GetFireRateRPS() => fireRateValues[fireRateLevel - 1];
+    
+    public float GetBulletSpeed() => GetPropulsion() / GetBulletMass();
+    
+    public float GetFireRateCooldown() => 1f / GetFireRateRPS(); // Convert RPS to seconds between shots
+}
+
+[Serializable]
+public class GunData
+{
+    public int gunId;
+    public int tier;
+    public GunStats stats;
+    public bool isEquipped;
+    
+    public GunData(int id, int gunTier)
     {
-        return baseCost + (currentLevel * 100);
+        gunId = id;
+        tier = gunTier;
+        stats = new GunStats();
+        isEquipped = false;
     }
     
-    public int GetCurrentDamage()
+    public long GetBaseCost()
     {
-        return baseDamage + (currentLevel * 5);
+        return (long)Mathf.Pow(100000, tier - 1);
     }
     
-    public float GetCurrentFireRate()
+    public long GetStatUpgradeCost(string statName)
     {
-        return Mathf.Max(0.1f, baseFireRate - (currentLevel * 0.1f));
+        int currentLevel = 0;
+        int upgradeOrder = 0;
+        
+        switch (statName)
+        {
+            case "propulsion":
+                currentLevel = stats.propulsionLevel;
+                upgradeOrder = stats.propulsionUpgradeOrder;
+                break;
+            case "bulletMass":
+                currentLevel = stats.bulletMassLevel;
+                upgradeOrder = stats.bulletMassUpgradeOrder;
+                break;
+            case "magSize":
+                currentLevel = stats.magSizeLevel;
+                upgradeOrder = stats.magSizeUpgradeOrder;
+                break;
+            case "fireRate":
+                currentLevel = stats.fireRateLevel;
+                upgradeOrder = stats.fireRateUpgradeOrder;
+                break;
+        }
+        
+        if (currentLevel >= 9) return -1; // Max level
+        
+        long baseCost = GetBaseCost();
+        long cost = (long)(baseCost * Mathf.Pow(2, currentLevel * upgradeOrder));
+        return cost;
+    }
+    
+    public float GetDamage()
+    {
+        float bulletSpeed = stats.GetBulletSpeed();
+        float speedMultiplier = Mathf.Min(bulletSpeed, 1f);
+        float tierMultiplier = Mathf.Pow(4, tier - 1);
+        return tierMultiplier * speedMultiplier * stats.GetBulletMass();
     }
 }
 
 [Serializable]
 public class PlayerProgressionData
 {
-    public int coins;
-    public string equippedWeaponId;
-    public List<WeaponData> ownedWeapons;
+    public long coins;
+    public int equippedGunId;
+    public List<GunData> ownedGuns;
+    public int nextGunId; // For generating unique gun IDs
     
     public PlayerProgressionData()
     {
         coins = 0;
-        equippedWeaponId = "pistol"; // Default weapon
-        ownedWeapons = new List<WeaponData>();
+        equippedGunId = 1;
+        ownedGuns = new List<GunData>();
+        nextGunId = 2;
+        
+        // Start with one tier 1 gun
+        GunData starterGun = new GunData(1, 1);
+        starterGun.isEquipped = true;
+        ownedGuns.Add(starterGun);
     }
 }
 
@@ -50,12 +121,14 @@ public class PlayerProgression : MonoBehaviour
     public static PlayerProgression Instance { get; private set; }
     
     private PlayerProgressionData progressionData;
-    private List<WeaponData> availableWeapons;
+    
+    public const int MAX_GUNS = 12;
+    public const int MAX_STAT_LEVEL = 9;
     
     // Rewards
-    public int coinsPerMatch = 50;
-    public int coinsPerWin = 150;
-    public int coinsPerKill = 20;
+    public long coinsPerMatch = 1000;
+    public long coinsPerWin = 5000;
+    public long coinsPerKill = 500;
     
     private void Awake()
     {
@@ -63,7 +136,6 @@ public class PlayerProgression : MonoBehaviour
         {
             Instance = this;
             DontDestroyOnLoad(gameObject);
-            InitializeWeapons();
             LoadProgress();
         }
         else
@@ -72,68 +144,20 @@ public class PlayerProgression : MonoBehaviour
         }
     }
     
-    private void InitializeWeapons()
-    {
-        availableWeapons = new List<WeaponData>
-        {
-            new WeaponData
-            {
-                weaponId = "pistol",
-                weaponName = "Pistol",
-                baseDamage = 10,
-                baseFireRate = 0.5f,
-                baseCost = 0, // Starting weapon
-                currentLevel = 1,
-                isOwned = true
-            },
-            new WeaponData
-            {
-                weaponId = "rifle",
-                weaponName = "Rifle",
-                baseDamage = 15,
-                baseFireRate = 0.3f,
-                baseCost = 500,
-                currentLevel = 1,
-                isOwned = false
-            },
-            new WeaponData
-            {
-                weaponId = "shotgun",
-                weaponName = "Shotgun",
-                baseDamage = 25,
-                baseFireRate = 1.0f,
-                baseCost = 800,
-                currentLevel = 1,
-                isOwned = false
-            },
-            new WeaponData
-            {
-                weaponId = "sniper",
-                weaponName = "Sniper",
-                baseDamage = 50,
-                baseFireRate = 2.0f,
-                baseCost = 1500,
-                currentLevel = 1,
-                isOwned = false
-            }
-        };
-    }
-    
     public void LoadProgress()
     {
         string json = PlayerPrefs.GetString("PlayerProgression", "");
         
         if (string.IsNullOrEmpty(json))
         {
-            // New player
             progressionData = new PlayerProgressionData();
-            progressionData.ownedWeapons.Add(GetWeaponData("pistol"));
             SaveProgress();
+            Debug.Log("New player created with tier 1 gun");
         }
         else
         {
             progressionData = JsonUtility.FromJson<PlayerProgressionData>(json);
-            Debug.Log($"Loaded progress: {progressionData.coins} coins");
+            Debug.Log($"Loaded progress: {progressionData.coins} coins, {progressionData.ownedGuns.Count} guns");
         }
     }
     
@@ -145,14 +169,14 @@ public class PlayerProgression : MonoBehaviour
         Debug.Log($"Saved progress: {progressionData.coins} coins");
     }
     
-    public void AddCoins(int amount)
+    public void AddCoins(long amount)
     {
         progressionData.coins += amount;
         SaveProgress();
         Debug.Log($"Added {amount} coins. Total: {progressionData.coins}");
     }
     
-    public bool SpendCoins(int amount)
+    public bool SpendCoins(long amount)
     {
         if (progressionData.coins >= amount)
         {
@@ -165,108 +189,144 @@ public class PlayerProgression : MonoBehaviour
         return false;
     }
     
-    public int GetCoins()
+    public long GetCoins()
     {
         return progressionData.coins;
     }
     
-    public WeaponData GetWeaponData(string weaponId)
+    public List<GunData> GetOwnedGuns()
     {
-        return availableWeapons.Find(w => w.weaponId == weaponId);
+        return progressionData.ownedGuns;
     }
     
-    public WeaponData GetEquippedWeapon()
+    public GunData GetEquippedGun()
     {
-        var weapon = progressionData.ownedWeapons.Find(w => w.weaponId == progressionData.equippedWeaponId);
-        if (weapon == null)
+        return progressionData.ownedGuns.Find(g => g.gunId == progressionData.equippedGunId);
+    }
+    
+    public GunData GetGunById(int gunId)
+    {
+        return progressionData.ownedGuns.Find(g => g.gunId == gunId);
+    }
+    
+    public bool CanBuyNewGun()
+    {
+        return progressionData.ownedGuns.Count < MAX_GUNS;
+    }
+    
+    public bool BuyGun(int tier)
+    {
+        if (!CanBuyNewGun())
         {
-            // Fallback to pistol
-            weapon = progressionData.ownedWeapons.Find(w => w.weaponId == "pistol");
-        }
-        return weapon;
-    }
-    
-    public List<WeaponData> GetAllWeapons()
-    {
-        return availableWeapons;
-    }
-    
-    public List<WeaponData> GetOwnedWeapons()
-    {
-        return progressionData.ownedWeapons;
-    }
-    
-    public bool BuyWeapon(string weaponId)
-    {
-        var weaponTemplate = GetWeaponData(weaponId);
-        if (weaponTemplate == null)
-        {
-            Debug.LogError($"Weapon {weaponId} not found!");
+            Debug.Log("Gun inventory full! Maximum 12 guns.");
             return false;
         }
         
-        if (IsWeaponOwned(weaponId))
+        long cost = (long)Mathf.Pow(100000, tier - 1);
+        
+        if (SpendCoins(cost))
         {
-            Debug.Log("Already own this weapon!");
+            GunData newGun = new GunData(progressionData.nextGunId, tier);
+            progressionData.nextGunId++;
+            progressionData.ownedGuns.Add(newGun);
+            SaveProgress();
+            Debug.Log($"Bought tier {tier} gun for {cost} coins!");
+            return true;
+        }
+        
+        return false;
+    }
+    
+    public bool UpgradeStat(int gunId, string statName)
+    {
+        GunData gun = GetGunById(gunId);
+        if (gun == null)
+        {
+            Debug.LogError("Gun not found!");
             return false;
         }
         
-        if (SpendCoins(weaponTemplate.baseCost))
+        long cost = gun.GetStatUpgradeCost(statName);
+        if (cost == -1)
         {
-            var newWeapon = new WeaponData
-            {
-                weaponId = weaponTemplate.weaponId,
-                weaponName = weaponTemplate.weaponName,
-                baseDamage = weaponTemplate.baseDamage,
-                baseFireRate = weaponTemplate.baseFireRate,
-                baseCost = weaponTemplate.baseCost,
-                currentLevel = 1,
-                isOwned = true
-            };
+            Debug.Log("Stat already at max level!");
+            return false;
+        }
+        
+        if (SpendCoins(cost))
+        {
+            // Get the current total upgrade count to determine next upgrade order
+            int totalUpgrades = gun.stats.propulsionUpgradeOrder + 
+                               gun.stats.bulletMassUpgradeOrder + 
+                               gun.stats.magSizeUpgradeOrder + 
+                               gun.stats.fireRateUpgradeOrder;
             
-            progressionData.ownedWeapons.Add(newWeapon);
+            switch (statName)
+            {
+                case "propulsion":
+                    gun.stats.propulsionLevel++;
+                    if (gun.stats.propulsionUpgradeOrder == 0)
+                        gun.stats.propulsionUpgradeOrder = totalUpgrades + 1;
+                    break;
+                case "bulletMass":
+                    gun.stats.bulletMassLevel++;
+                    if (gun.stats.bulletMassUpgradeOrder == 0)
+                        gun.stats.bulletMassUpgradeOrder = totalUpgrades + 1;
+                    break;
+                case "magSize":
+                    gun.stats.magSizeLevel++;
+                    if (gun.stats.magSizeUpgradeOrder == 0)
+                        gun.stats.magSizeUpgradeOrder = totalUpgrades + 1;
+                    break;
+                case "fireRate":
+                    gun.stats.fireRateLevel++;
+                    if (gun.stats.fireRateUpgradeOrder == 0)
+                        gun.stats.fireRateUpgradeOrder = totalUpgrades + 1;
+                    break;
+            }
+            
             SaveProgress();
-            Debug.Log($"Bought {weaponTemplate.weaponName}!");
+            Debug.Log($"Upgraded {statName} to level {gun.stats.propulsionLevel}!");
             return true;
         }
         
         return false;
     }
     
-    public bool UpgradeWeapon(string weaponId)
+    public void EquipGun(int gunId)
     {
-        var weapon = progressionData.ownedWeapons.Find(w => w.weaponId == weaponId);
-        if (weapon == null)
+        GunData gun = GetGunById(gunId);
+        if (gun != null)
         {
-            Debug.LogError("Don't own this weapon!");
+            // Unequip all guns
+            foreach (var g in progressionData.ownedGuns)
+            {
+                g.isEquipped = false;
+            }
+            
+            // Equip selected gun
+            gun.isEquipped = true;
+            progressionData.equippedGunId = gunId;
+            SaveProgress();
+            Debug.Log($"Equipped gun ID {gunId}");
+        }
+    }
+    
+    public bool DeleteGun(int gunId)
+    {
+        GunData gun = GetGunById(gunId);
+        if (gun == null) return false;
+        
+        if (gun.isEquipped)
+        {
+            Debug.Log("Cannot delete equipped gun!");
             return false;
         }
         
-        int upgradeCost = weapon.GetUpgradeCost();
-        if (SpendCoins(upgradeCost))
-        {
-            weapon.currentLevel++;
-            SaveProgress();
-            Debug.Log($"Upgraded {weapon.weaponName} to level {weapon.currentLevel}!");
-            return true;
-        }
-        
-        return false;
-    }
-    
-    public void EquipWeapon(string weaponId)
-    {
-        if (IsWeaponOwned(weaponId))
-        {
-            progressionData.equippedWeaponId = weaponId;
-            SaveProgress();
-            Debug.Log($"Equipped {weaponId}");
-        }
-    }
-    
-    public bool IsWeaponOwned(string weaponId)
-    {
-        return progressionData.ownedWeapons.Exists(w => w.weaponId == weaponId);
+        progressionData.ownedGuns.Remove(gun);
+        SaveProgress();
+        Debug.Log($"Deleted gun ID {gunId}");
+        return true;
     }
     
     public void RewardMatchParticipation()
@@ -290,5 +350,11 @@ public class PlayerProgression : MonoBehaviour
         PlayerPrefs.DeleteKey("PlayerProgression");
         LoadProgress();
         Debug.Log("Progress reset!");
+    }
+    
+    // Debug: Add coins for testing
+    public void AddTestCoins(long amount)
+    {
+        AddCoins(amount);
     }
 }

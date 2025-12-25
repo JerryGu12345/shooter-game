@@ -72,27 +72,18 @@ partial struct GoInGameServerSystem : ISystem
 
             // Spawn weapon entity and attach it to the player
             // In GoInGameServerSystem.cs, after spawning weapon:
+            // In GoInGameServerSystem.cs, after spawning weapon:
             Entity weaponEntity = entityCommandBuffer.Instantiate(entitiesReferences.weaponPrefabEntity);
             entityCommandBuffer.SetComponent(weaponEntity, LocalTransform.FromPosition(new float3(0.5f, 0.5f, 0.5f)));
             entityCommandBuffer.AddComponent(weaponEntity, new GhostOwner { NetworkId = networkId.Value });
 
-            // Get equipped weapon stats from PlayerProgression
-            if (PlayerProgression.Instance != null)
-            {
-                WeaponData equippedWeapon = PlayerProgression.Instance.GetEquippedWeapon();
-                entityCommandBuffer.AddComponent(weaponEntity, new PlayerWeapon{
-                    firerate = equippedWeapon.GetCurrentFireRate(),
-                    damage = equippedWeapon.GetCurrentDamage()
-                });
-            }
-            else
-            {
-                // Fallback to default pistol stats
-                entityCommandBuffer.AddComponent(weaponEntity, new PlayerWeapon{
-                    firerate = 0.5f,
-                    damage = 10
-                });
-            }
+            // Initialize with default values - ApplyWeaponStatsSystem will set real stats
+            entityCommandBuffer.AddComponent(weaponEntity, new PlayerWeapon{
+                firerate = 0f,
+                damage = 0,
+                bulletSpeed = 0f,
+                magSize = 0
+            });
 
             // Link all entities under the client's connection entity
             entityCommandBuffer.AppendToBuffer(receiveRpcCommandRequest.ValueRO.SourceConnection, new LinkedEntityGroup { Value = playerEntity });

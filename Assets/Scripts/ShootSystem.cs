@@ -3,7 +3,6 @@ using Unity.Burst;
 using Unity.Entities;
 using Unity.NetCode;
 using Unity.Transforms;
-using Unity.Physics;
 using Unity.Mathematics;
 
 [UpdateInGroup(typeof(PredictedSimulationSystemGroup))]
@@ -48,10 +47,13 @@ partial struct ShootSystem : ISystem
 
                             PlayerWeapon weapon = SystemAPI.GetComponent<PlayerWeapon>(child.Value);
                             
+                            // Use bullet speed from weapon stats (affects visual speed and damage calculation)
+                            float bulletMoveSpeed = 10f * weapon.bulletSpeed; // Scale for visual
+                            
                             entityCommandBuffer.AddComponent(bulletEntity, new Bullet{
                                 timer=0.0f,
-                                moveSpeed=10f,
-                                damage=weapon.damage, // Use weapon's damage
+                                moveSpeed=bulletMoveSpeed,
+                                damage=weapon.damage,
                                 p0=entityManager.GetComponentData<GhostInstance>(entity).ghostId,
                                 p1=-1,
                                 p2=-1

@@ -73,7 +73,7 @@ public class GameOverUI : MonoBehaviour
         if (!hasRewarded && PlayerProgression.Instance != null)
         {
             hasRewarded = true;
-            int coinsEarned = PlayerProgression.Instance.coinsPerMatch;
+            long coinsEarned = PlayerProgression.Instance.coinsPerMatch;
             
             if (isWinner)
             {
@@ -87,7 +87,7 @@ public class GameOverUI : MonoBehaviour
             
             if (rewardsText != null)
             {
-                rewardsText.text = $"+{coinsEarned} coins earned!";
+                rewardsText.text = $"+{FormatLargeNumber(coinsEarned)} coins earned!";
             }
             
             Debug.Log($"Rewarded {coinsEarned} coins");
@@ -136,5 +136,14 @@ public class GameOverUI : MonoBehaviour
         SceneManager.LoadScene("MainMenu", LoadSceneMode.Single);
         
         // Note: This GameObject will be destroyed automatically by LoadScene(Single)
+    }
+    
+    private string FormatLargeNumber(long number)
+    {
+        if (number < 1000) return number.ToString();
+        if (number < 1000000) return $"{number / 1000f:F1}K";
+        if (number < 1000000000) return $"{number / 1000000f:F1}M";
+        if (number < 1000000000000) return $"{number / 1000000000f:F1}B";
+        return $"{number / 1000000000000f:F1}T";
     }
 }

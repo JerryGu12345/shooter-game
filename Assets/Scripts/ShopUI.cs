@@ -8,37 +8,57 @@ public class ShopUI : MonoBehaviour
     [Header("UI References")]
     [SerializeField] private GameObject shopPanel;
     [SerializeField] private TextMeshProUGUI coinsText;
-    [SerializeField] private Transform weaponListContainer;
-    [SerializeField] private GameObject weaponItemPrefab;
+    [SerializeField] private Transform gunListContainer;
+    [SerializeField] private GameObject gunItemPrefab;
     [SerializeField] private Button closeButton;
     
-    [Header("Weapon Detail Panel")]
-    [SerializeField] private GameObject weaponDetailPanel;
-    [SerializeField] private TextMeshProUGUI weaponNameText;
-    [SerializeField] private TextMeshProUGUI weaponStatsText;
-    [SerializeField] private TextMeshProUGUI weaponLevelText;
-    [SerializeField] private Button buyButton;
-    [SerializeField] private Button upgradeButton;
-    [SerializeField] private Button equipButton;
-    [SerializeField] private TextMeshProUGUI buyButtonText;
-    [SerializeField] private TextMeshProUGUI upgradeButtonText;
+    [Header("Buy New Gun Panel")]
+    [SerializeField] private GameObject buyGunPanel;
+    [SerializeField] private TMP_InputField tierInputField;
+    [SerializeField] private TextMeshProUGUI buyCostText;
+    [SerializeField] private Button buyNewGunButton;
     
-    private WeaponData selectedWeapon;
-    private List<GameObject> weaponItems = new List<GameObject>();
+    [Header("Gun Detail Panel")]
+    [SerializeField] private GameObject gunDetailPanel;
+    [SerializeField] private TextMeshProUGUI gunTitleText;
+    [SerializeField] private TextMeshProUGUI damageText;
+    [SerializeField] private TextMeshProUGUI bulletSpeedText;
+    
+    [Header("Stat Upgrade Buttons")]
+    [SerializeField] private Button propulsionUpgradeButton;
+    [SerializeField] private Button bulletMassUpgradeButton;
+    [SerializeField] private Button magSizeUpgradeButton;
+    [SerializeField] private Button fireRateUpgradeButton;
+    [SerializeField] private TextMeshProUGUI propulsionText;
+    [SerializeField] private TextMeshProUGUI bulletMassText;
+    [SerializeField] private TextMeshProUGUI magSizeText;
+    [SerializeField] private TextMeshProUGUI fireRateText;
+    
+    [Header("Action Buttons")]
+    [SerializeField] private Button equipButton;
+    [SerializeField] private Button deleteButton;
+    
+    private GunData selectedGun;
+    private List<GameObject> gunItems = new List<GameObject>();
     
     private void Start()
     {
         shopPanel.SetActive(false);
-        weaponDetailPanel.SetActive(false);
-        
-        buyButton.onClick.AddListener(OnBuyClicked);
-        upgradeButton.onClick.AddListener(OnUpgradeClicked);
-        equipButton.onClick.AddListener(OnEquipClicked);
+        gunDetailPanel.SetActive(false);
         
         if (closeButton != null)
-        {
             closeButton.onClick.AddListener(CloseShop);
-        }
+        
+        buyNewGunButton.onClick.AddListener(OnBuyNewGunClicked);
+        tierInputField.onValueChanged.AddListener(OnTierInputChanged);
+        
+        propulsionUpgradeButton.onClick.AddListener(() => OnUpgradeStatClicked("propulsion"));
+        bulletMassUpgradeButton.onClick.AddListener(() => OnUpgradeStatClicked("bulletMass"));
+        magSizeUpgradeButton.onClick.AddListener(() => OnUpgradeStatClicked("magSize"));
+        fireRateUpgradeButton.onClick.AddListener(() => OnUpgradeStatClicked("fireRate"));
+        
+        equipButton.onClick.AddListener(OnEquipClicked);
+        deleteButton.onClick.AddListener(OnDeleteClicked);
     }
     
     public void OpenShop()
@@ -50,147 +70,202 @@ public class ShopUI : MonoBehaviour
     public void CloseShop()
     {
         shopPanel.SetActive(false);
-        weaponDetailPanel.SetActive(false);
+        gunDetailPanel.SetActive(false);
     }
     
     private void RefreshShop()
     {
-        // Update coin display
-        coinsText.text = $"Coins: {PlayerProgression.Instance.GetCoins()}";
+        if (PlayerProgression.Instance == null)
+        {
+            Debug.LogError("PlayerProgression.Instance is null!");
+            return;
+        }
         
-        // Clear existing weapon items
-        foreach (var item in weaponItems)
+        // Update coin display with scientific notation for large numbers
+        long coins = PlayerProgression.Instance.GetCoins();
+        coinsText.text = $"Coins: {FormatLargeNumber(coins)}";
+        
+        // Update buy gun panel
+        UpdateBuyGunPanel();
+        
+        // Clear existing gun items
+        foreach (var item in gunItems)
         {
             Destroy(item);
         }
-        weaponItems.Clear();
+        gunItems.Clear();
         
-        // Create weapon items
-        var allWeapons = PlayerProgression.Instance.GetAllWeapons();
-        foreach (var weapon in allWeapons)
+        // Create gun items
+        var ownedGuns = PlayerProgression.Instance.GetOwnedGuns();
+        Debug.Log($"Found {ownedGuns.Count} guns");
+        
+        foreach (var gun in ownedGuns)
         {
-            GameObject item = Instantiate(weaponItemPrefab, weaponListContainer);
-            weaponItems.Add(item);
+            GameObject item = Instantiate(gunItemPrefab, gunListContainer);
+            gunItems.Add(item);
             
-            // Set up weapon item
-            var nameText = item.transform.Find("WeaponName").GetComponent<TextMeshProUGUI>();
+            // Set up gun item
+            var nameText = item.transform.Find("GunName").GetComponent<TextMeshProUGUI>();
             var statusText = item.transform.Find("StatusText").GetComponent<TextMeshProUGUI>();
             var selectButton = item.GetComponent<Button>();
             
-            nameText.text = weapon.weaponName;
+            nameText.text = $"Tier {gun.tier} Gun #{gun.gunId}";
             
-            bool isOwned = PlayerProgression.Instance.IsWeaponOwned(weapon.weaponId);
-            bool isEquipped = PlayerProgression.Instance.GetEquippedWeapon()?.weaponId == weapon.weaponId;
-            
-            if (isEquipped)
+            if (gun.isEquipped)
             {
                 statusText.text = "EQUIPPED";
                 statusText.color = Color.green;
             }
-            else if (isOwned)
-            {
-                statusText.text = "OWNED";
-                statusText.color = Color.white;
-            }
             else
             {
-                statusText.text = $"{weapon.baseCost} coins";
-                statusText.color = Color.yellow;
+                statusText.text = $"DMG: {gun.GetDamage():F1}";
+                statusText.color = Color.white;
             }
             
             // Add click handler
-            WeaponData weaponRef = weapon; // Capture for lambda
-            selectButton.onClick.AddListener(() => OnWeaponSelected(weaponRef));
+            GunData gunRef = gun;
+            selectButton.onClick.AddListener(() => {
+                Debug.Log($"Gun clicked: Tier {gunRef.tier} #{gunRef.gunId}");
+                OnGunSelected(gunRef);
+            });
+        }
+        
+        Debug.Log($"Created {gunItems.Count} gun items");
+    }
+    
+    private void UpdateBuyGunPanel()
+    {
+        bool canBuyMore = PlayerProgression.Instance.CanBuyNewGun();
+        buyGunPanel.SetActive(canBuyMore);
+        
+        if (canBuyMore)
+        {
+            OnTierInputChanged(tierInputField.text);
         }
     }
     
-    private void OnWeaponSelected(WeaponData weapon)
+    private void OnTierInputChanged(string tierStr)
     {
-        selectedWeapon = weapon;
-        ShowWeaponDetails();
-    }
-    
-    private void ShowWeaponDetails()
-    {
-        if (selectedWeapon == null) return;
-        
-        weaponDetailPanel.SetActive(true);
-        
-        // Get the owned version if player owns it
-        WeaponData ownedWeapon = null;
-        if (PlayerProgression.Instance.IsWeaponOwned(selectedWeapon.weaponId))
+        if (int.TryParse(tierStr, out int tier) && tier >= 1)
         {
-            ownedWeapon = PlayerProgression.Instance.GetOwnedWeapons()
-                .Find(w => w.weaponId == selectedWeapon.weaponId);
-        }
-        
-        bool isOwned = ownedWeapon != null;
-        bool isEquipped = PlayerProgression.Instance.GetEquippedWeapon()?.weaponId == selectedWeapon.weaponId;
-        
-        WeaponData displayWeapon = isOwned ? ownedWeapon : selectedWeapon;
-        
-        // Update display
-        weaponNameText.text = displayWeapon.weaponName;
-        weaponLevelText.text = isOwned ? $"Level {displayWeapon.currentLevel}" : "Not Owned";
-        
-        weaponStatsText.text = $"Damage: {displayWeapon.GetCurrentDamage()}\n" +
-                               $"Fire Rate: {displayWeapon.GetCurrentFireRate():F2}s\n" +
-                               $"DPS: {(displayWeapon.GetCurrentDamage() / displayWeapon.GetCurrentFireRate()):F1}";
-        
-        // Update buttons
-        if (isOwned)
-        {
-            buyButton.gameObject.SetActive(false);
-            upgradeButton.gameObject.SetActive(true);
-            equipButton.gameObject.SetActive(true);
-            
-            int upgradeCost = displayWeapon.GetUpgradeCost();
-            upgradeButtonText.text = $"Upgrade ({upgradeCost} coins)";
-            upgradeButton.interactable = PlayerProgression.Instance.GetCoins() >= upgradeCost;
-            
-            equipButton.interactable = !isEquipped;
-            equipButton.GetComponentInChildren<TextMeshProUGUI>().text = 
-                isEquipped ? "Equipped" : "Equip";
+            long cost = (long)Mathf.Pow(100000, tier - 1);
+            buyCostText.text = $"Cost: {FormatLargeNumber(cost)}";
+            buyNewGunButton.interactable = PlayerProgression.Instance.GetCoins() >= cost;
         }
         else
         {
-            buyButton.gameObject.SetActive(true);
-            upgradeButton.gameObject.SetActive(false);
-            equipButton.gameObject.SetActive(false);
-            
-            buyButtonText.text = $"Buy ({selectedWeapon.baseCost} coins)";
-            buyButton.interactable = PlayerProgression.Instance.GetCoins() >= selectedWeapon.baseCost;
+            buyCostText.text = "Invalid tier";
+            buyNewGunButton.interactable = false;
         }
     }
     
-    private void OnBuyClicked()
+    private void OnBuyNewGunClicked()
     {
-        if (selectedWeapon == null) return;
-        
-        if (PlayerProgression.Instance.BuyWeapon(selectedWeapon.weaponId))
+        if (int.TryParse(tierInputField.text, out int tier) && tier >= 1)
         {
-            RefreshShop();
-            ShowWeaponDetails();
+            if (PlayerProgression.Instance.BuyGun(tier))
+            {
+                RefreshShop();
+            }
         }
     }
     
-    private void OnUpgradeClicked()
+    private void OnGunSelected(GunData gun)
     {
-        if (selectedWeapon == null) return;
+        Debug.Log($"OnGunSelected called for: Tier {gun.tier} #{gun.gunId}");
+        selectedGun = gun;
+        ShowGunDetails();
+    }
+    
+    private void ShowGunDetails()
+    {
+        if (selectedGun == null)
+        {
+            Debug.LogError("selectedGun is null!");
+            return;
+        }
         
-        if (PlayerProgression.Instance.UpgradeWeapon(selectedWeapon.weaponId))
+        Debug.Log($"Showing details for: Tier {selectedGun.tier} #{selectedGun.gunId}");
+        gunDetailPanel.SetActive(true);
+        
+        gunTitleText.text = $"Tier {selectedGun.tier} Gun #{selectedGun.gunId}";
+        damageText.text = $"Damage: {selectedGun.GetDamage():F2}";
+        bulletSpeedText.text = $"Bullet Speed: {selectedGun.stats.GetBulletSpeed():F2}";
+        
+        // Update stat displays and buttons
+        UpdateStatButton("propulsion", selectedGun.stats.propulsionLevel, 
+            selectedGun.stats.GetPropulsion(), propulsionUpgradeButton, propulsionText);
+        UpdateStatButton("bulletMass", selectedGun.stats.bulletMassLevel, 
+            selectedGun.stats.GetBulletMass(), bulletMassUpgradeButton, bulletMassText);
+        UpdateStatButton("magSize", selectedGun.stats.magSizeLevel, 
+            selectedGun.stats.GetMagSize(), magSizeUpgradeButton, magSizeText);
+        UpdateStatButton("fireRate", selectedGun.stats.fireRateLevel, 
+            selectedGun.stats.GetFireRateRPS(), fireRateUpgradeButton, fireRateText);
+        
+        // Update action buttons
+        equipButton.interactable = !selectedGun.isEquipped;
+        equipButton.GetComponentInChildren<TextMeshProUGUI>().text = 
+            selectedGun.isEquipped ? "Equipped" : "Equip";
+        
+        deleteButton.interactable = !selectedGun.isEquipped;
+    }
+    
+    private void UpdateStatButton(string statName, int level, float value, Button button, TextMeshProUGUI text)
+    {
+        text.text = $"{statName}: Lv.{level} ({value:F2})";
+        
+        long upgradeCost = selectedGun.GetStatUpgradeCost(statName);
+        
+        if (upgradeCost == -1)
+        {
+            button.interactable = false;
+            button.GetComponentInChildren<TextMeshProUGUI>().text = "MAX";
+        }
+        else
+        {
+            button.interactable = PlayerProgression.Instance.GetCoins() >= upgradeCost;
+            button.GetComponentInChildren<TextMeshProUGUI>().text = FormatLargeNumber(upgradeCost);
+        }
+    }
+    
+    private void OnUpgradeStatClicked(string statName)
+    {
+        if (selectedGun == null) return;
+        
+        if (PlayerProgression.Instance.UpgradeStat(selectedGun.gunId, statName))
         {
             RefreshShop();
-            ShowWeaponDetails();
+            ShowGunDetails();
         }
     }
     
     private void OnEquipClicked()
     {
-        if (selectedWeapon == null) return;
+        if (selectedGun == null) return;
         
-        PlayerProgression.Instance.EquipWeapon(selectedWeapon.weaponId);
+        PlayerProgression.Instance.EquipGun(selectedGun.gunId);
         RefreshShop();
-        ShowWeaponDetails();
+        ShowGunDetails();
+    }
+    
+    private void OnDeleteClicked()
+    {
+        if (selectedGun == null) return;
+        
+        if (PlayerProgression.Instance.DeleteGun(selectedGun.gunId))
+        {
+            selectedGun = null;
+            gunDetailPanel.SetActive(false);
+            RefreshShop();
+        }
+    }
+    
+    private string FormatLargeNumber(long number)
+    {
+        if (number < 1000) return number.ToString();
+        if (number < 1000000) return $"{number / 1000f:F1}K";
+        if (number < 1000000000) return $"{number / 1000000f:F1}M";
+        if (number < 1000000000000) return $"{number / 1000000000f:F1}B";
+        return $"{number / 1000000000000f:F1}T";
     }
 }
