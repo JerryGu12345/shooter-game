@@ -43,7 +43,6 @@ public class ShopUI : MonoBehaviour
     
     private void Start()
     {
-        shopPanel.SetActive(false);
         gunDetailPanel.SetActive(false);
         
         if (closeButton != null)
@@ -63,14 +62,29 @@ public class ShopUI : MonoBehaviour
     
     public void OpenShop()
     {
-        shopPanel.SetActive(true);
+        // Called by UIManager when shop panel is activated
         RefreshShop();
     }
     
     public void CloseShop()
     {
-        shopPanel.SetActive(false);
+        // Hide detail panel and go back
         gunDetailPanel.SetActive(false);
+        UIManager.Instance.GoBack();
+    }
+    
+    private void OnEnable()
+    {
+        // Refresh shop every time the panel is shown
+        if (PlayerProgression.Instance != null)
+        {
+            Debug.Log("ShopPanel enabled, refreshing shop...");
+            RefreshShop();
+        }
+        else
+        {
+            Debug.LogError("PlayerProgression.Instance is null when ShopPanel was enabled!");
+        }
     }
     
     private void RefreshShop()
@@ -78,6 +92,18 @@ public class ShopUI : MonoBehaviour
         if (PlayerProgression.Instance == null)
         {
             Debug.LogError("PlayerProgression.Instance is null!");
+            return;
+        }
+        
+        if (gunListContainer == null)
+        {
+            Debug.LogError("GunListContainer is not assigned in Inspector!");
+            return;
+        }
+        
+        if (gunItemPrefab == null)
+        {
+            Debug.LogError("GunItemPrefab is not assigned in Inspector!");
             return;
         }
         
@@ -97,7 +123,7 @@ public class ShopUI : MonoBehaviour
         
         // Create gun items
         var ownedGuns = PlayerProgression.Instance.GetOwnedGuns();
-        Debug.Log($"Found {ownedGuns.Count} guns");
+        Debug.Log($"Found {ownedGuns.Count} guns in PlayerProgression");
         
         foreach (var gun in ownedGuns)
         {
