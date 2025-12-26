@@ -29,7 +29,29 @@ public class GunStats
     
     public float GetBulletSpeed() => GetPropulsion() / GetBulletMass();
     
-    public float GetFireRateCooldown() => 1f / GetFireRateRPS(); // Convert RPS to seconds between shots
+    public float GetFireRateCooldown() => 1f / GetFireRateRPS();
+    
+    public int GetMaxedStatsCount()
+    {
+        int count = 0;
+        if (propulsionLevel >= 9) count++;
+        if (bulletMassLevel >= 9) count++;
+        if (magSizeLevel >= 9) count++;
+        if (fireRateLevel >= 9) count++;
+        return count;
+    }
+    
+    public void ResetAllLevels()
+    {
+        propulsionLevel = 1;
+        bulletMassLevel = 1;
+        magSizeLevel = 1;
+        fireRateLevel = 1;
+        propulsionUpgradeOrder = 0;
+        bulletMassUpgradeOrder = 0;
+        magSizeUpgradeOrder = 0;
+        fireRateUpgradeOrder = 0;
+    }
 }
 
 [Serializable]
@@ -92,6 +114,41 @@ public class GunData
         float tierMultiplier = Mathf.Pow(4, tier - 1);
         return tierMultiplier * speedMultiplier * stats.GetBulletMass();
     }
+    
+    public bool CanEvolve()
+    {
+        return stats.GetMaxedStatsCount() >= 2;
+    }
+    
+    public bool CanSuperEvolve()
+    {
+        return stats.GetMaxedStatsCount() >= 4;
+    }
+    
+    public long GetGunValue()
+    {
+        long value = GetBaseCost();
+        
+        // Add value of all upgrades
+        for (int i = 1; i < stats.propulsionLevel; i++)
+        {
+            value += (long)(GetBaseCost() * Mathf.Pow(2, i * stats.propulsionUpgradeOrder));
+        }
+        for (int i = 1; i < stats.bulletMassLevel; i++)
+        {
+            value += (long)(GetBaseCost() * Mathf.Pow(2, i * stats.bulletMassUpgradeOrder));
+        }
+        for (int i = 1; i < stats.magSizeLevel; i++)
+        {
+            value += (long)(GetBaseCost() * Mathf.Pow(2, i * stats.magSizeUpgradeOrder));
+        }
+        for (int i = 1; i < stats.fireRateLevel; i++)
+        {
+            value += (long)(GetBaseCost() * Mathf.Pow(2, i * stats.fireRateUpgradeOrder));
+        }
+        
+        return value;
+    }
 }
 
 [Serializable]
@@ -100,7 +157,9 @@ public class PlayerProgressionData
     public long coins;
     public int equippedGunId;
     public List<GunData> ownedGuns;
-    public int nextGunId; // For generating unique gun IDs
+    public int nextGunId;
+    public int prestige;
+    public int maxTierEverAfforded;
     
     public PlayerProgressionData()
     {
@@ -108,6 +167,8 @@ public class PlayerProgressionData
         equippedGunId = 1;
         ownedGuns = new List<GunData>();
         nextGunId = 2;
+        prestige = 0;
+        maxTierEverAfforded = 1;
         
         // Start with one tier 1 gun
         GunData starterGun = new GunData(1, 1);
@@ -125,10 +186,10 @@ public class PlayerProgression : MonoBehaviour
     public const int MAX_GUNS = 12;
     public const int MAX_STAT_LEVEL = 9;
     
-    // Rewards
-    public long coinsPerMatch = 1000;
-    public long coinsPerWin = 5000;
-    public long coinsPerKill = 500;
+    // Base rewards (multiplied by prestige multiplier)
+    public long baseCoinsPerMatch = 1000;
+    public long baseCoinsPerWin = 5000;
+    public long baseCoinsPerKill = 500;
     
     private void Awake()
     {
@@ -157,7 +218,7 @@ public class PlayerProgression : MonoBehaviour
         else
         {
             progressionData = JsonUtility.FromJson<PlayerProgressionData>(json);
-            Debug.Log($"Loaded progress: {progressionData.coins} coins, {progressionData.ownedGuns.Count} guns");
+            Debug.Log($"Loaded progress: {progressionData.coins} coins, {progressionData.ownedGuns.Count} guns, Prestige {progressionData.prestige}");
         }
     }
     
@@ -169,11 +230,49 @@ public class PlayerProgression : MonoBehaviour
         Debug.Log($"Saved progress: {progressionData.coins} coins");
     }
     
+    public float GetPrestigeMultiplier()
+    {
+        return Mathf.Pow(100000, progressionData.prestige);
+    }
+    
+    public long coinsPerMatch => (long)(baseCoinsPerMatch * GetPrestigeMultiplier());
+    public long coinsPerWin => (long)(baseCoinsPerWin * GetPrestigeMultiplier());
+    public long coinsPerKill => (long)(baseCoinsPerKill * GetPrestigeMultiplier());
+    
     public void AddCoins(long amount)
     {
         progressionData.coins += amount;
+        
+        // Update max tier ever afforded
+        UpdateMaxTierAfforded();
+        
         SaveProgress();
         Debug.Log($"Added {amount} coins. Total: {progressionData.coins}");
+    }
+    
+    private void UpdateMaxTierAfforded()
+    {
+        // Calculate the highest tier the player can afford
+        int tier = 1;
+        while (true)
+        {
+            long cost = (long)Mathf.Pow(100000, tier - 1);
+            if (progressionData.coins >= cost)
+            {
+                tier++;
+            }
+            else
+            {
+                break;
+            }
+        }
+        tier--; // Go back to last affordable tier
+        
+        if (tier > progressionData.maxTierEverAfforded)
+        {
+            progressionData.maxTierEverAfforded = tier;
+            Debug.Log($"Max tier ever afforded increased to: {tier}");
+        }
     }
     
     public bool SpendCoins(long amount)
@@ -192,6 +291,26 @@ public class PlayerProgression : MonoBehaviour
     public long GetCoins()
     {
         return progressionData.coins;
+    }
+    
+    public int GetPrestige()
+    {
+        return progressionData.prestige;
+    }
+    
+    public int GetMaxTierAfforded()
+    {
+        return progressionData.maxTierEverAfforded;
+    }
+    
+    public int GetAvailableTier1()
+    {
+        return Mathf.Max(2, progressionData.maxTierEverAfforded);
+    }
+    
+    public int GetAvailableTier2()
+    {
+        return Mathf.Max(2, progressionData.maxTierEverAfforded) - 1;
     }
     
     public List<GunData> GetOwnedGuns()
@@ -291,6 +410,84 @@ public class PlayerProgression : MonoBehaviour
         }
         
         return false;
+    }
+    
+    public bool EvolveGun(int gunId)
+    {
+        GunData gun = GetGunById(gunId);
+        if (gun == null) return false;
+        
+        if (!gun.CanEvolve())
+        {
+            Debug.Log("Gun needs at least 2 maxed stats to evolve!");
+            return false;
+        }
+        
+        int tierIncrease = gun.CanSuperEvolve() ? 2 : 1;
+        gun.tier += tierIncrease;
+        gun.stats.ResetAllLevels();
+        
+        SaveProgress();
+        Debug.Log($"Gun evolved! New tier: {gun.tier} (Super Evolve: {gun.CanSuperEvolve()})");
+        return true;
+    }
+    
+    public long CalculateTotalValue()
+    {
+        long total = progressionData.coins;
+        
+        foreach (var gun in progressionData.ownedGuns)
+        {
+            total += gun.GetGunValue();
+        }
+        
+        return total;
+    }
+    
+    public int CalculateNewPrestige(long sacrificeValue)
+    {
+        // New prestige = log(sacrifice value) / (10 * log(10))
+        if (sacrificeValue <= 0) return 0;
+        
+        double logValue = Math.Log10(sacrificeValue);
+        double newPrestige = logValue / (10.0 * Math.Log10(10));
+        return (int)Math.Floor(newPrestige);
+    }
+    
+    public bool CanIsekai()
+    {
+        long totalValue = CalculateTotalValue();
+        int newPrestige = CalculateNewPrestige(totalValue);
+        return newPrestige > progressionData.prestige;
+    }
+    
+    public bool Isekai()
+    {
+        long totalValue = CalculateTotalValue();
+        int newPrestige = CalculateNewPrestige(totalValue);
+        
+        if (newPrestige <= progressionData.prestige)
+        {
+            Debug.Log($"Cannot isekai! New prestige ({newPrestige}) must be higher than current ({progressionData.prestige})");
+            return false;
+        }
+        
+        // Reset everything except prestige
+        progressionData.coins = 0;
+        progressionData.ownedGuns.Clear();
+        progressionData.nextGunId = 2;
+        progressionData.maxTierEverAfforded = 1;
+        progressionData.prestige = newPrestige;
+        
+        // Give starter gun
+        GunData starterGun = new GunData(1, 1);
+        starterGun.isEquipped = true;
+        progressionData.ownedGuns.Add(starterGun);
+        progressionData.equippedGunId = 1;
+        
+        SaveProgress();
+        Debug.Log($"Isekai successful! New prestige: {newPrestige}. Sacrifice value was: {totalValue}");
+        return true;
     }
     
     public void EquipGun(int gunId)

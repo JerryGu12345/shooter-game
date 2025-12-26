@@ -24,11 +24,11 @@ public partial struct ApplyWeaponStatsSystem : ISystem
                 if (equippedGun != null)
                 {
                     weapon.ValueRW.firerate = equippedGun.stats.GetFireRateCooldown();
-                    weapon.ValueRW.damage = (int)equippedGun.GetDamage();
+                    weapon.ValueRW.damage = equippedGun.GetDamage(); // Now float, no cast needed
                     weapon.ValueRW.bulletSpeed = equippedGun.stats.GetBulletSpeed();
                     weapon.ValueRW.magSize = equippedGun.stats.GetMagSize();
                     
-                    Debug.Log($"Applied gun stats: Damage={weapon.ValueRW.damage}, " +
+                    Debug.Log($"Applied gun stats: Damage={weapon.ValueRW.damage:F2}, " +
                              $"FireRate={weapon.ValueRW.firerate:F2}s, " +
                              $"BulletSpeed={weapon.ValueRW.bulletSpeed:F2}");
                 }

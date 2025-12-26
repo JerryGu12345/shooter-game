@@ -14,9 +14,10 @@ public class ShopUI : MonoBehaviour
     
     [Header("Buy New Gun Panel")]
     [SerializeField] private GameObject buyGunPanel;
-    [SerializeField] private TMP_InputField tierInputField;
-    [SerializeField] private TextMeshProUGUI buyCostText;
-    [SerializeField] private Button buyNewGunButton;
+    [SerializeField] private Button buyTier1Button;
+    [SerializeField] private Button buyTier2Button;
+    [SerializeField] private TextMeshProUGUI buyTier1Text;
+    [SerializeField] private TextMeshProUGUI buyTier2Text;
     
     [Header("Gun Detail Panel")]
     [SerializeField] private GameObject gunDetailPanel;
@@ -37,6 +38,15 @@ public class ShopUI : MonoBehaviour
     [Header("Action Buttons")]
     [SerializeField] private Button equipButton;
     [SerializeField] private Button deleteButton;
+    [SerializeField] private Button evolveButton;
+    [SerializeField] private TextMeshProUGUI evolveButtonText;
+    
+    [Header("Prestige Panel")]
+    [SerializeField] private GameObject prestigePanel;
+    [SerializeField] private TextMeshProUGUI prestigeText;
+    [SerializeField] private TextMeshProUGUI sacrificeValueText;
+    [SerializeField] private TextMeshProUGUI newPrestigeText;
+    [SerializeField] private Button isekaiButton;
     
     private GunData selectedGun;
     private List<GameObject> gunItems = new List<GameObject>();
@@ -48,8 +58,8 @@ public class ShopUI : MonoBehaviour
         if (closeButton != null)
             closeButton.onClick.AddListener(CloseShop);
         
-        buyNewGunButton.onClick.AddListener(OnBuyNewGunClicked);
-        tierInputField.onValueChanged.AddListener(OnTierInputChanged);
+        buyTier1Button.onClick.AddListener(() => OnBuyGunClicked(PlayerProgression.Instance.GetAvailableTier1()));
+        buyTier2Button.onClick.AddListener(() => OnBuyGunClicked(PlayerProgression.Instance.GetAvailableTier2()));
         
         propulsionUpgradeButton.onClick.AddListener(() => OnUpgradeStatClicked("propulsion"));
         bulletMassUpgradeButton.onClick.AddListener(() => OnUpgradeStatClicked("bulletMass"));
@@ -58,6 +68,8 @@ public class ShopUI : MonoBehaviour
         
         equipButton.onClick.AddListener(OnEquipClicked);
         deleteButton.onClick.AddListener(OnDeleteClicked);
+        evolveButton.onClick.AddListener(OnEvolveClicked);
+        isekaiButton.onClick.AddListener(OnIsekaiClicked);
     }
     
     public void OpenShop()
@@ -110,6 +122,9 @@ public class ShopUI : MonoBehaviour
         // Update coin display with scientific notation for large numbers
         long coins = PlayerProgression.Instance.GetCoins();
         coinsText.text = $"Coins: {FormatLargeNumber(coins)}";
+        
+        // Update prestige panel
+        UpdatePrestigePanel();
         
         // Update buy gun panel
         UpdateBuyGunPanel();
@@ -166,33 +181,53 @@ public class ShopUI : MonoBehaviour
         
         if (canBuyMore)
         {
-            OnTierInputChanged(tierInputField.text);
+            int tier1 = PlayerProgression.Instance.GetAvailableTier1();
+            int tier2 = PlayerProgression.Instance.GetAvailableTier2();
+            
+            long cost1 = (long)Mathf.Pow(100000, tier1 - 1);
+            long cost2 = (long)Mathf.Pow(100000, tier2 - 1);
+            
+            buyTier1Text.text = $"Buy Tier {tier1}\n{FormatLargeNumber(cost1)}";
+            buyTier2Text.text = $"Buy Tier {tier2}\n{FormatLargeNumber(cost2)}";
+            
+            buyTier1Button.interactable = PlayerProgression.Instance.GetCoins() >= cost1;
+            buyTier2Button.interactable = PlayerProgression.Instance.GetCoins() >= cost2;
         }
     }
     
-    private void OnTierInputChanged(string tierStr)
+    private void UpdatePrestigePanel()
     {
-        if (int.TryParse(tierStr, out int tier) && tier >= 1)
+        if (prestigePanel == null) return;
+        
+        int prestige = PlayerProgression.Instance.GetPrestige();
+        prestigeText.text = $"Prestige: {prestige}";
+        
+        long totalValue = PlayerProgression.Instance.CalculateTotalValue();
+        sacrificeValueText.text = $"Total Value: {FormatLargeNumber(totalValue)}";
+        
+        int newPrestige = PlayerProgression.Instance.CalculateNewPrestige(totalValue);
+        newPrestigeText.text = $"New Prestige: {newPrestige}";
+        
+        bool canIsekai = PlayerProgression.Instance.CanIsekai();
+        isekaiButton.interactable = canIsekai;
+        
+        if (!canIsekai)
         {
-            long cost = (long)Mathf.Pow(100000, tier - 1);
-            buyCostText.text = $"Cost: {FormatLargeNumber(cost)}";
-            buyNewGunButton.interactable = PlayerProgression.Instance.GetCoins() >= cost;
+            isekaiButton.GetComponentInChildren<TextMeshProUGUI>().text = 
+                $"Isekai (Need Prestige {prestige + 1}+)";
         }
         else
         {
-            buyCostText.text = "Invalid tier";
-            buyNewGunButton.interactable = false;
+            isekaiButton.GetComponentInChildren<TextMeshProUGUI>().text = 
+                $"Isekai → Prestige {newPrestige}";
         }
     }
     
-    private void OnBuyNewGunClicked()
+    private void OnBuyGunClicked(int tier)
     {
-        if (int.TryParse(tierInputField.text, out int tier) && tier >= 1)
+        if (PlayerProgression.Instance.BuyGun(tier))
         {
-            if (PlayerProgression.Instance.BuyGun(tier))
-            {
-                RefreshShop();
-            }
+            RefreshShop();
         }
     }
     
@@ -234,6 +269,24 @@ public class ShopUI : MonoBehaviour
             selectedGun.isEquipped ? "Equipped" : "Equip";
         
         deleteButton.interactable = !selectedGun.isEquipped;
+        
+        // Update evolve button
+        bool canEvolve = selectedGun.CanEvolve();
+        bool canSuperEvolve = selectedGun.CanSuperEvolve();
+        evolveButton.interactable = canEvolve;
+        
+        if (canSuperEvolve)
+        {
+            evolveButtonText.text = $"Super Evolve (+2 Tiers)\n{selectedGun.stats.GetMaxedStatsCount()}/4 Stats Maxed";
+        }
+        else if (canEvolve)
+        {
+            evolveButtonText.text = $"Evolve (+1 Tier)\n{selectedGun.stats.GetMaxedStatsCount()}/4 Stats Maxed";
+        }
+        else
+        {
+            evolveButtonText.text = $"Need 2+ Maxed Stats\n{selectedGun.stats.GetMaxedStatsCount()}/4 Stats Maxed";
+        }
     }
     
     private void UpdateStatButton(string statName, int level, float value, Button button, TextMeshProUGUI text)
@@ -279,6 +332,28 @@ public class ShopUI : MonoBehaviour
         if (selectedGun == null) return;
         
         if (PlayerProgression.Instance.DeleteGun(selectedGun.gunId))
+        {
+            selectedGun = null;
+            gunDetailPanel.SetActive(false);
+            RefreshShop();
+        }
+    }
+    
+    private void OnEvolveClicked()
+    {
+        if (selectedGun == null) return;
+        
+        if (PlayerProgression.Instance.EvolveGun(selectedGun.gunId))
+        {
+            RefreshShop();
+            ShowGunDetails();
+        }
+    }
+    
+    private void OnIsekaiClicked()
+    {
+        // Add confirmation dialog here if you want
+        if (PlayerProgression.Instance.Isekai())
         {
             selectedGun = null;
             gunDetailPanel.SetActive(false);

@@ -15,7 +15,7 @@ public class PlayerAuthoring : MonoBehaviour
 }
 
 public struct Player : IComponentData {
-    [GhostField] public int health;
+    [GhostField] public float health;
     public float firecooldown;
 }
 
