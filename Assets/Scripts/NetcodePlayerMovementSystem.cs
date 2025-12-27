@@ -13,24 +13,46 @@ partial struct NetcodePlayerMovementSystem : ISystem
         var physicsWorldSingleton = SystemAPI.GetSingleton<PhysicsWorldSingleton>();
         foreach (
             (RefRO<NetcodePlayerInput> netcodePlayerInput,
-            RefRW<LocalTransform> localTransform, 
+            RefRW<LocalTransform> localTransform,
+            RefRO<PlayerEquipment> equipment,
+            RefRO<PlayerStats> stats,
+            RefRW<PhysicsVelocity> velocity,
             Entity entity
             )
             in SystemAPI.Query<
                 RefRO<NetcodePlayerInput>,
-                RefRW<LocalTransform>
+                RefRW<LocalTransform>,
+                RefRO<PlayerEquipment>,
+                RefRO<PlayerStats>,
+                RefRW<PhysicsVelocity>
             >().WithAll<Simulate,Player>().WithNone<PlayerNeedsChildren>().WithEntityAccess()) {
                 
-            //Debug.Log($"[NetcodePlayerMovementSystem] Running in {state.World.Name}");
-            float moveSpeed = 10f;
+            float baseMoveSpeed = 10f;
             float3 moveVector = netcodePlayerInput.ValueRO.inputVector;
+            
+            // Apply size penalty
+            float itemSize = equipment.ValueRO.currentItemSize;
+            float moveSpeed = baseMoveSpeed / itemSize;
+            
+            // Apply med kit penalty (additional 80% reduction while using)
+            if (stats.ValueRO.isUsingMedKit)
+            {
+                moveSpeed *= 0.2f; // 80% reduction = 20% remaining
+            }
 
             // Move based on player orientation
             moveVector = math.mul(localTransform.ValueRW.Rotation, moveVector);
             
-            if (!IsGrounded(entity, localTransform.ValueRW.Position, physicsWorldSingleton.CollisionWorld)) {
-                //Debug.Log("groundn't");
-                //moveVector.y=0;
+            // Apply jump with size penalty
+            if (moveVector.y > 0 && IsGrounded(entity, localTransform.ValueRW.Position, physicsWorldSingleton.CollisionWorld))
+            {
+                float jumpHeight = 1f / itemSize; // Max 1 meter divided by size
+                velocity.ValueRW.Linear.y = math.sqrt(2f * 9.81f * jumpHeight);
+                moveVector.y = 0; // Don't apply vertical movement through position
+            }
+            else
+            {
+                moveVector.y = 0;
             }
                 
             localTransform.ValueRW.Position += moveVector * moveSpeed * SystemAPI.Time.DeltaTime;

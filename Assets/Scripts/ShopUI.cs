@@ -47,6 +47,55 @@ public class ShopUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI sacrificeValueText;
     [SerializeField] private TextMeshProUGUI newPrestigeText;
     [SerializeField] private Button isekaiButton;
+
+    [Header("Upgrades")]
+    [SerializeField] private TextMeshProUGUI hpLevelText;
+    [SerializeField] private TextMeshProUGUI hpValueText;
+    [SerializeField] private Button hpUpgradeButton;
+    [SerializeField] private TextMeshProUGUI medKitLevelText;
+    [SerializeField] private TextMeshProUGUI medKitValueText;
+    [SerializeField] private Button medKitUpgradeButton;
+
+    private void UpdateUpgradesPanel()
+    {
+        // HP
+        int hpLevel = PlayerProgression.Instance.GetHPLevel();
+        float maxHP = PlayerProgression.Instance.GetMaxHP();
+        long hpCost = PlayerProgression.Instance.GetHPUpgradeCost();
+        
+        hpLevelText.text = $"HP Level: {hpLevel}";
+        hpValueText.text = $"Max HP: {maxHP:F1}";
+        hpUpgradeButton.GetComponentInChildren<TextMeshProUGUI>().text = 
+            $"Upgrade ({FormatLargeNumber(hpCost)})";
+        hpUpgradeButton.interactable = PlayerProgression.Instance.GetCoins() >= hpCost;
+        
+        // Med Kit
+        int medKitLevel = PlayerProgression.Instance.GetMedKitLevel();
+        float healRate = PlayerProgression.Instance.GetMedKitHealPerSecond();
+        long medKitCost = PlayerProgression.Instance.GetMedKitUpgradeCost();
+        
+        medKitLevelText.text = $"Med Kit Level: {medKitLevel}";
+        medKitValueText.text = $"Heal: {healRate:F2} HP/s";
+        medKitUpgradeButton.GetComponentInChildren<TextMeshProUGUI>().text = 
+            $"Upgrade ({FormatLargeNumber(medKitCost)})";
+        medKitUpgradeButton.interactable = PlayerProgression.Instance.GetCoins() >= medKitCost;
+    }
+
+    private void OnUpgradeHPClicked()
+    {
+        if (PlayerProgression.Instance.UpgradeHP())
+        {
+            RefreshShop();
+        }
+    }
+
+    private void OnUpgradeMedKitClicked()
+    {
+        if (PlayerProgression.Instance.UpgradeMedKit())
+        {
+            RefreshShop();
+        }
+    }
     
     private GunData selectedGun;
     private List<GameObject> gunItems = new List<GameObject>();
@@ -70,6 +119,9 @@ public class ShopUI : MonoBehaviour
         deleteButton.onClick.AddListener(OnDeleteClicked);
         evolveButton.onClick.AddListener(OnEvolveClicked);
         isekaiButton.onClick.AddListener(OnIsekaiClicked);
+
+        hpUpgradeButton.onClick.AddListener(OnUpgradeHPClicked);
+        medKitUpgradeButton.onClick.AddListener(OnUpgradeMedKitClicked);
     }
     
     public void OpenShop()
@@ -170,7 +222,7 @@ public class ShopUI : MonoBehaviour
                 OnGunSelected(gunRef);
             });
         }
-        
+        UpdateUpgradesPanel();
         Debug.Log($"Created {gunItems.Count} gun items");
     }
     

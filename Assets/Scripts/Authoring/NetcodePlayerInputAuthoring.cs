@@ -18,4 +18,10 @@ public struct NetcodePlayerInput : IInputComponentData {
     public float3 inputVector;
     public float2 mouseDelta;
     public InputEvent shoot;
+    public InputEvent reload;
+    public InputEvent switchToKnife;
+    public InputEvent switchToGun1;
+    public InputEvent switchToGun2;
+    public InputEvent switchToMedKit;
+    public bool useMedKit; // Hold to use
 }

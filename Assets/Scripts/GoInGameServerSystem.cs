@@ -85,6 +85,31 @@ partial struct GoInGameServerSystem : ISystem
                 magSize = 0
             });
 
+
+            // After creating player entity:
+            entityCommandBuffer.AddComponent(playerEntity, new PlayerStats{
+                health = 0f, // Will be set by InitializePlayerStatsSystem
+                maxHealth = 0f,
+                currentAmmo = 0,
+                maxAmmo = 0,
+                reloadTimer = 0f,
+                isReloading = false,
+                medKitUseTimer = 0f,
+                isUsingMedKit = false,
+                medKitHealPerSecond = 0f,
+                medKitAccumulatedHeal = 0f
+            });
+
+            entityCommandBuffer.AddComponent(playerEntity, new PlayerEquipment{
+                currentSlot = EquipmentSlot.Gun1,
+                gun1Id = -1, // Will be set by InitializePlayerStatsSystem
+                gun2Id = -1,
+                swapTimer = 0f,
+                isSwapping = false,
+                pendingSlot = EquipmentSlot.Gun1,
+                currentItemSize = 2f
+            });
+
             // Link all entities under the client's connection entity
             entityCommandBuffer.AppendToBuffer(receiveRpcCommandRequest.ValueRO.SourceConnection, new LinkedEntityGroup { Value = playerEntity });
             entityCommandBuffer.AppendToBuffer(receiveRpcCommandRequest.ValueRO.SourceConnection, new LinkedEntityGroup { Value = headEntity });

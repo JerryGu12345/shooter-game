@@ -115,6 +115,14 @@ public class GunData
         return tierMultiplier * speedMultiplier * stats.GetBulletMass();
     }
     
+    public float GetSize()
+    {
+        float propulsionLevel = stats.propulsionLevel;
+        float magSizeLevel = stats.magSizeLevel;
+        float size = 1 + (propulsionLevel + magSizeLevel) / 2f;
+        return Mathf.Clamp(size, 2f, 10f);
+    }
+    
     public bool CanEvolve()
     {
         return stats.GetMaxedStatsCount() >= 2;
@@ -160,6 +168,8 @@ public class PlayerProgressionData
     public int nextGunId;
     public int prestige;
     public int maxTierEverAfforded;
+    public int hpLevel;
+    public int medKitLevel;
     
     public PlayerProgressionData()
     {
@@ -169,6 +179,8 @@ public class PlayerProgressionData
         nextGunId = 2;
         prestige = 0;
         maxTierEverAfforded = 1;
+        hpLevel = 1;
+        medKitLevel = 1;
         
         // Start with one tier 1 gun
         GunData starterGun = new GunData(1, 1);
@@ -296,6 +308,62 @@ public class PlayerProgression : MonoBehaviour
     public int GetPrestige()
     {
         return progressionData.prestige;
+    }
+    
+    public int GetHPLevel()
+    {
+        return progressionData.hpLevel;
+    }
+    
+    public float GetMaxHP()
+    {
+        return 10f * Mathf.Pow(1.3f, progressionData.hpLevel - 1);
+    }
+    
+    public long GetHPUpgradeCost()
+    {
+        return (long)Mathf.Pow(10, progressionData.hpLevel);
+    }
+    
+    public bool UpgradeHP()
+    {
+        long cost = GetHPUpgradeCost();
+        if (SpendCoins(cost))
+        {
+            progressionData.hpLevel++;
+            SaveProgress();
+            Debug.Log($"Upgraded HP to level {progressionData.hpLevel}. Max HP: {GetMaxHP():F2}");
+            return true;
+        }
+        return false;
+    }
+    
+    public int GetMedKitLevel()
+    {
+        return progressionData.medKitLevel;
+    }
+    
+    public float GetMedKitHealPerSecond()
+    {
+        return 1f * Mathf.Pow(1.3f, progressionData.medKitLevel - 1);
+    }
+    
+    public long GetMedKitUpgradeCost()
+    {
+        return (long)Mathf.Pow(10, progressionData.medKitLevel);
+    }
+    
+    public bool UpgradeMedKit()
+    {
+        long cost = GetMedKitUpgradeCost();
+        if (SpendCoins(cost))
+        {
+            progressionData.medKitLevel++;
+            SaveProgress();
+            Debug.Log($"Upgraded MedKit to level {progressionData.medKitLevel}. Heal: {GetMedKitHealPerSecond():F2} HP/s");
+            return true;
+        }
+        return false;
     }
     
     public int GetMaxTierAfforded()
@@ -478,6 +546,8 @@ public class PlayerProgression : MonoBehaviour
         progressionData.nextGunId = 2;
         progressionData.maxTierEverAfforded = 1;
         progressionData.prestige = newPrestige;
+        progressionData.hpLevel = 1;
+        progressionData.medKitLevel = 1;
         
         // Give starter gun
         GunData starterGun = new GunData(1, 1);
